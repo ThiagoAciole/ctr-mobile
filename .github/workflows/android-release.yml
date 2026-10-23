@@ -50,7 +50,7 @@ jobs:
           test -n "$ANDROID_KEYSTORE_PASSWORD"
           test -n "$ANDROID_KEY_ALIAS"
           test -n "$ANDROID_KEY_PASSWORD"
-          ./gradlew --no-daemon :app:assembleRelease -PversionName="$RELEASE_VERSION_NAME" -PversionCode="$RELEASE_VERSION_CODE"
+          bash ./gradlew --no-daemon :app:assembleRelease -PversionName="$RELEASE_VERSION_NAME" -PversionCode="$RELEASE_VERSION_CODE"
 
       - name: Publish APK to GitHub Release
         env:
