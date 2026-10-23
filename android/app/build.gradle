@@ -1,0 +1,69 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.ctrnative'
+    compileSdk 34
+    // Pin the NDK that ships the EGL/JNI headers the companion display needs.
+    ndkVersion '27.2.12479018'
+
+    defaultConfig {
+        applicationId "com.ctrnative"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86'
+        }
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared", "-DCTR_NATIVE=ON"
+                abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86'
+
+                // The debug variant compiles the native side with no -O flag at
+                // all, which is -O0. That is the right default for debugging a
+                // library; it is the wrong one for a recompiled PS1 game, where
+                // every frame walks a BSP and builds a display list in C. It
+                // cost roughly twelve times the CPU per frame on device, and
+                // read as the phone being too slow to hold 120fps.
+                //
+                // Debug info is kept -- the tombstones the hang watchdog relies
+                // on need it -- so this is RelWithDebInfo in all but name.
+                cFlags "-O2", "-fno-omit-frame-pointer"
+                cppFlags "-O2", "-fno-omit-frame-pointer"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "../../CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs = [
+                'src/main/java',
+                '../../externals/SDL/android-project/app/src/main/java'
+            ]
+            res.srcDirs = [
+                'src/main/res'
+            ]
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}

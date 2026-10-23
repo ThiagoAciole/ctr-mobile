@@ -1,0 +1,261 @@
+#ifndef CTR_NATIVE_NAMESPACE_PROC_H
+#define CTR_NATIVE_NAMESPACE_PROC_H
+
+#define SIZE_RELATIVE_POOL_BUCKET(a, b, c, d) (a << 16) | b | c | d
+
+enum STACK_POOL
+{
+	LARGE = 0x100,
+	MEDIUM = 0x200,
+	SMALL = 0x300
+};
+
+enum THREAD_RELATIVE
+{
+	// yes, both are zero
+	// specify PARENT if thread relative is given,
+	// specify NONE if no thread relative is given
+
+	NONE = 0,
+	CHILD_SIBLING = 0,
+	SELF_SIBLING = 0x400,
+	CHILD_BETWEEN = 0x2000
+};
+
+enum THREAD_BUCKET
+{
+	PLAYER,    // 0x00: 1b2c
+	ROBOT,     // 0x01: 1b40
+	GHOST,     // 0x02: 1b54 (no string, also ND box)
+	STATIC,    // 0x03: 1b68
+	MINE,      // 0x04: 1b7c
+	WARPPAD,   // 0x05: 1b90
+	TRACKING,  // 0x06: 1ba4
+	BURST,     // 0x07: 1bb8
+	BLOWUP,    // 0x08: 1bcc
+	TURBO,     // 0x09: 1be0
+	SPIDER,    // 0x0A: 1bf4
+	FOLLOWER,  // 0x0B: 1c08
+	STARTTEXT, // 0x0C: 1c1c
+	OTHER,     // 0x0D: 1c30
+	AKUAKU,    // 0x0E: 1c44
+	CAMERA,    // 0x0F: 1c58
+	HUD,       // 0x10: 1c6c
+	PAUSE,     // 0x11: 1c80
+
+	NUM_BUCKETS // 0x12
+};
+
+enum
+{
+	THREAD_FLAG_DEAD = 0x0800,
+	THREAD_FLAG_DISABLE_COLLISION = 0x1000,
+};
+typedef u32 ThreadFlags;
+
+CTR_STATIC_ASSERT(sizeof(ThreadFlags) == 0x4);
+
+typedef void (*ThreadFunc)(struct Thread *self);
+typedef void (*ThreadSimpleCollideFunc)(struct Thread *self);
+typedef int (*ThreadScratchCollideFunc)(struct Thread *self, struct Thread *other, void *funcThCollide, struct ScratchpadStruct *sps);
+typedef int (*ThreadBurstCollideFunc)(struct Thread *self, struct Thread *other, void *funcThCollide, int modelID);
+
+#define PROC_STACK_ITEM_SIZE(retailSize) ((retailSize) + sizeof(struct Item) - 8u)
+
+enum
+{
+	THREAD_DRIVER_HIT_RADIUS = 0x40,
+	THREAD_DRIVER_HIT_RADIUS_SQUARED = THREAD_DRIVER_HIT_RADIUS * THREAD_DRIVER_HIT_RADIUS,
+};
+
+struct Thread
+{
+	// 0x0
+	struct Thread *next;
+
+	// 0x4
+	struct Thread *prev;
+
+	// 0x8
+	const char *name;
+
+	// 0xc
+	// weapons hold drivers as parentThreads when fired
+	struct Thread *parentThread;
+
+	// 0x10
+	// players hold other players,
+	// cameras hold other cameras, etc
+	struct Thread *siblingThread;
+
+	// 0x14
+	// drivers hold weapons as childThreads when fired
+	struct Thread *childThread;
+
+	// 0x18
+	// unused, can pause a thread for
+	// any number of frames
+	int cooldownFrameCount;
+
+
+	// & 0xff = threadBucket
+	// 		0 - player
+	// 		1 - robotcar
+	// 		etc
+
+	// & 0x0X00 = object pool (X=1,2,3)
+	// & 0x0400 = init with sibling
+	// & 0x0800 = dead thread, need to delete
+	// & 0x1000 = disable collision
+	// & 0x2000 = init with parent
+
+	// & 0xXXX0000 = size of object allocated
+
+	// 0x1c
+	u32 flags;
+
+	// 0x20
+	int timesDestroyed;
+
+	// 0x24
+	ThreadFunc funcThDestroy;
+
+	//  0x28
+	// NOTE(aalhendi): Retail stores this as a raw code pointer. Collision
+	// users call it with different register contracts.
+	void *funcThCollide;
+
+	// 0x2c
+	ThreadFunc funcThTick;
+
+	// This would be 9900C for players, or a pointer
+	// to a camera, etc
+	// 0x30
+	void *object;
+
+	// Thread and Instance are linked together,
+	// except Camera storing CameraDC here
+	// 0x34
+	struct Instance *inst;
+
+	// Driver collision/model fields initialized by VehBirth_NonGhost.
+
+	// 0x38
+	s32 driverHitRadiusSquared;
+
+	// 0x3c
+	s16 driverCollisionReserved_0x3c;
+	s16 driverCollisionReserved_0x3e;
+
+	// 0x40
+	s16 driverCollisionReserved_0x40;
+
+	// 0x42
+	s16 driverHitRadius;
+
+	// 0x44
+	s16 modelIndex;
+	s16 padding_0x46;
+
+	// this struct is 0x48 bytes large
+};
+
+// used for PROC_CollidePointWithSelf
+struct BucketSearchParams
+{
+	// 0x0
+	SVec3 pos;
+	s16 padding_0x6;
+
+	// 0x8
+	struct Thread *th;
+
+	// 0xC
+	int bestDistSq;
+
+	// 0x10
+	SVec3 dist;
+	s16 padding_0x16;
+};
+
+struct DriverCollisionSearch
+{
+	struct BucketSearchParams bucket;
+	SVec3 hitDir;
+	s16 padding_0x1e;
+};
+
+CTR_STATIC_ASSERT(offsetof(struct DriverCollisionSearch, bucket) == 0);
+CTR_STATIC_ASSERT(offsetof(struct DriverCollisionSearch, hitDir) == sizeof(struct BucketSearchParams));
+#if UINTPTR_MAX == UINT32_MAX
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverHitRadiusSquared) == 0x38);
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverCollisionReserved_0x3c) == 0x3c);
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverCollisionReserved_0x3e) == 0x3e);
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverCollisionReserved_0x40) == 0x40);
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverHitRadius) == 0x42);
+CTR_STATIC_ASSERT(offsetof(struct Thread, modelIndex) == 0x44);
+CTR_STATIC_ASSERT(sizeof(struct Thread) == 0x48);
+CTR_STATIC_ASSERT(offsetof(struct BucketSearchParams, th) == 0x8);
+CTR_STATIC_ASSERT(offsetof(struct BucketSearchParams, bestDistSq) == 0xc);
+CTR_STATIC_ASSERT(offsetof(struct BucketSearchParams, dist) == 0x10);
+CTR_STATIC_ASSERT(sizeof(struct BucketSearchParams) == 0x18);
+CTR_STATIC_ASSERT(sizeof(struct DriverCollisionSearch) == 0x20);
+#else
+CTR_STATIC_ASSERT(sizeof(void *) == 0x8);
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverHitRadiusSquared) == 0x68);
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverCollisionReserved_0x3c) == 0x6c);
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverCollisionReserved_0x3e) == 0x6e);
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverCollisionReserved_0x40) == 0x70);
+CTR_STATIC_ASSERT(offsetof(struct Thread, driverHitRadius) == 0x72);
+CTR_STATIC_ASSERT(offsetof(struct Thread, modelIndex) == 0x74);
+CTR_STATIC_ASSERT(sizeof(struct Thread) == 0x78);
+CTR_STATIC_ASSERT(offsetof(struct BucketSearchParams, th) == 0x8);
+CTR_STATIC_ASSERT(offsetof(struct BucketSearchParams, bestDistSq) == 0x10);
+CTR_STATIC_ASSERT(offsetof(struct BucketSearchParams, dist) == 0x14);
+CTR_STATIC_ASSERT(sizeof(struct BucketSearchParams) == 0x20);
+CTR_STATIC_ASSERT(sizeof(struct DriverCollisionSearch) == 0x28);
+#endif
+CTR_STATIC_ASSERT(THREAD_FLAG_DEAD == 0x0800);
+CTR_STATIC_ASSERT(THREAD_FLAG_DISABLE_COLLISION == 0x1000);
+
+// These are used to recursively
+// search threads with unidirectional
+// links (next = curr + 0x10)
+struct ThreadBucket
+{
+	// 0x0
+	struct Thread *thread;
+
+
+	// ==== ONLY FOR DEBUG MENU ====
+
+	// could be PLAYER
+	// 0x4
+	char *s_longName;
+
+	// could be PLYR
+	// 0x8
+	char *s_shortName;
+
+	// 0xC
+	int boolCantPause;
+
+	// 0x10
+	char rectCol[4];
+
+	// ============================
+
+
+	// size is 0x14
+};
+
+#if UINTPTR_MAX == UINT32_MAX
+CTR_STATIC_ASSERT(sizeof(struct ThreadBucket) == 0x14);
+#else
+CTR_STATIC_ASSERT(offsetof(struct ThreadBucket, s_longName) == 0x8);
+CTR_STATIC_ASSERT(offsetof(struct ThreadBucket, s_shortName) == 0x10);
+CTR_STATIC_ASSERT(offsetof(struct ThreadBucket, boolCantPause) == 0x18);
+CTR_STATIC_ASSERT(sizeof(struct ThreadBucket) == 0x20);
+#endif
+
+#endif

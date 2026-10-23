@@ -1,0 +1,4 @@
+Luckiest Guy
+Copyright 2010 Brian J. Bonislawsky DBA Astigmatic (AOETI).
+Licensed under the Apache License, Version 2.0.
+Source: https://github.com/google/fonts/tree/main/apache/luckiestguy

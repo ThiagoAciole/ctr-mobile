@@ -1,0 +1,422 @@
+#include <common.h>
+
+enum CutsceneCameraConstants
+{
+	CS_CAMERA_FADE_FULL = FP_ONE,
+	CS_CAMERA_FADE_STEP = 0x400,
+	CS_BOSS_MODEL_SCALE = FP_ONE,
+	CS_BOSS_CAMERA_ROT_X_OFFSET = ANG_PI,
+	CS_PODIUM_PATH_FRAME_FRACTION_BITS = 5,
+	CS_PODIUM_PATH_FRAME_UNIT = 1 << CS_PODIUM_PATH_FRAME_FRACTION_BITS,
+	CS_PODIUM_PRIZE_DROP_LEAD_TIME = 0x12c0,
+	CS_PODIUM_CONTINUE_TEXT_X = 0x100,
+	CS_PODIUM_CONTINUE_TEXT_Y = 0xbe,
+};
+
+// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800aed48-0x800aedf8
+b32 CS_Camera_BoolGotoBoss(void)
+{
+	struct GameTracker *gGT = sdata->gGT;
+
+	// If just got 18th relic
+	if ((gGT->podiumRewardID == STATIC_RELIC) && (gGT->currAdvProfile.numRelics >= ADV_OXIDE_FINAL_RELIC_COUNT))
+	{
+		// If Oxide was not beaten twice yet
+		if (!CHECK_ADV_BIT(sdata->advProgress.rewards, ADV_REWARD_BEAT_OXIDE_SECOND))
+		{
+			return 1;
+		}
+	}
+
+	// If just unlocked Key
+	if (gGT->podiumRewardID == STATIC_KEY)
+	{
+		return 1;
+	}
+
+	struct Instance *inst = gGT->drivers[0]->instSelf;
+	struct SpawnType2 *spawns = Level_GetSpawnType2PosRot(gGT->level1, "CS_Camera podium spawns");
+	struct SpawnPosRot *podiumSpawn =
+	    ((spawns == NULL) || (gGT->level1->numSpawnType2_PosRot <= 1)) ? NULL : SpawnType2_GetPosRot(&spawns[1], "CS_Camera podium spawn");
+	if (podiumSpawn == NULL)
+	{
+		return 1;
+	}
+	const SVec3 *podiumPos = &podiumSpawn->pos;
+
+	// TRUE if TeleportSelf did NOT spawn on podium (goto boss door)
+	return (inst->matrix.t[0] != podiumPos->x) || (inst->matrix.t[2] != podiumPos->z);
+}
+
+// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800ae9a8-0x800aed48
+void CS_Camera_ThTick_Boss(struct Thread *t)
+{
+	int cutsceneID;
+	s16 levID;
+
+	struct Instance *inst;
+	struct CutsceneObj *cs;
+	struct GameTracker *gGT;
+
+	gGT = sdata->gGT;
+	levID = gGT->levelID;
+
+	// for undecided cutscene:
+	//	hub*2+0 - intro (after winning trophy)
+	//	hub*2+1 - outro (after winning key)
+	if (D233.bossCutsceneIndex < 0)
+	{
+		cutsceneID = (levID - GEM_STONE_VALLEY) * 2;
+
+		if (gGT->podiumRewardID == STATIC_KEY)
+		{
+			cutsceneID++;
+		}
+	}
+
+	else
+	{
+		cutsceneID = D233.bossCutsceneIndex;
+	}
+
+	const struct BossCutsceneData *bcd = &R233.bossCS[cutsceneID];
+
+	switch (D233.cutsceneState)
+	{
+	// Start Fade-to-black
+	case CS_CAMERA_PAN:
+	case CS_WAIT_INPUT:
+		gGT->pushBuffer_UI.fadeFromBlack_desiredResult = 0;
+		gGT->pushBuffer_UI.fade_step = -CS_CAMERA_FADE_STEP;
+		D233.cutsceneState = CS_FADE_OUT;
+		break;
+
+	// Wait for fade-to-black
+	// Start loading process
+	case CS_FADE_OUT:
+
+		// wait for fade
+		if (gGT->pushBuffer_UI.fadeFromBlack_currentValue != 0)
+		{
+			break;
+		}
+
+		// kill all podium "other" threads
+		t = gGT->threadBuckets[OTHER].thread;
+		while (t != 0)
+		{
+			t->flags |= THREAD_FLAG_DEAD;
+			t = t->siblingThread;
+		}
+
+		// wait one frame, for the thread recycler to finish
+		if (gGT->threadBuckets[OTHER].thread != 0)
+		{
+			break;
+		}
+
+		CS_LoadBoss(bcd);
+		D233.cutsceneState = CS_LOADING;
+		break;
+
+	// Wait for loading callback,
+	// start thread for head+body
+	// start fade-to-normal
+	case CS_LOADING:
+
+		// NULLPTR checks if load finished,
+		// because CS_LoadBossCallback writes this last
+		if (D233.ptrModelBossHead == 0)
+		{
+			break;
+		}
+
+		struct Model **mArr = &D233.ptrModelBossHead;
+
+		for (int i = 0; i < 2; i++)
+		{
+			if (mArr[i] != NULL)
+			{
+				if (i != 0)
+				{
+					mArr[i] = (struct Model *)((char *)mArr[i] + 4);
+				}
+
+				gGT->modelPtr[mArr[i]->id] = mArr[i];
+			}
+		}
+
+		MEMPACK_SwapPacks(gGT->activeMempackIndex);
+
+		struct CsThreadInitData initData = {0};
+		initData.podiumPos.x = bcd->bossPos.x;
+		initData.podiumPos.y = bcd->bossPos.y;
+		initData.podiumPos.z = bcd->bossPos.z;
+		initData.rot.x = bcd->bossRot.x;
+		initData.rot.y = bcd->bossRot.y;
+		initData.rot.z = bcd->bossRot.z;
+		initData.characterPos.x = 0;
+		initData.characterPos.y = 0;
+		initData.characterPos.z = 0;
+
+		// MUST go backwards,
+		// Body first, sibling = 0
+		// Head next, sibling = body
+		t = 0;
+		for (int i = 1; i >= 0; i--)
+		{
+			if (mArr[i] == NULL)
+			{
+				continue;
+			}
+
+			t = CS_Thread_Init(mArr[i]->id, mArr[i]->name, &initData, 0, t);
+			if (t == NULL)
+			{
+				continue;
+			}
+
+			inst = t->inst;
+			cs = t->object;
+
+			// head
+			if (i == 0)
+			{
+				CS_ScriptCmd_OpcodeAt(cs, bcd->opcode);
+				cs->opcodeDuration = 0;
+				continue;
+			}
+
+			// body
+			inst->scale.x = CS_BOSS_MODEL_SCALE;
+			inst->scale.y = CS_BOSS_MODEL_SCALE;
+			inst->scale.z = CS_BOSS_MODEL_SCALE;
+			cs->desiredScale = CS_BOSS_MODEL_SCALE;
+		}
+
+		// set camera position and rotation for cutscene
+		gGT->pushBuffer[0].pos.x = bcd->camPos.x;
+		gGT->pushBuffer[0].pos.y = bcd->camPos.y;
+		gGT->pushBuffer[0].pos.z = bcd->camPos.z;
+
+		gGT->pushBuffer[0].rot.x = bcd->camRot.x + CS_BOSS_CAMERA_ROT_X_OFFSET;
+		gGT->pushBuffer[0].rot.y = bcd->camRot.y;
+		gGT->pushBuffer[0].rot.z = bcd->camRot.z;
+
+		// fade back in
+		gGT->pushBuffer_UI.fadeFromBlack_desiredResult = CS_CAMERA_FADE_FULL;
+		gGT->pushBuffer_UI.fade_step = CS_CAMERA_FADE_STEP;
+		D233.cutsceneState = CS_FADE_IN;
+		break;
+
+	case CS_FADE_IN:
+
+		// wait for fade
+		if (gGT->pushBuffer_UI.fadeFromBlack_currentValue != CS_CAMERA_FADE_FULL)
+		{
+			break;
+		}
+
+		D233.cutsceneState = CS_WAIT_END;
+		break;
+
+	case CS_WAIT_END:
+
+		// wait for cutscene to end
+		if (D233.isCutsceneOver != 1)
+		{
+			break;
+		}
+
+		gGT->podiumRewardID = NOFUNC; // 0
+		t->flags |= THREAD_FLAG_DEAD;
+	}
+}
+
+// NOTE(aalhendi): ASM-verified NTSC-U 926 0x800aedf8-0x800af328
+void CS_Camera_ThTick_Podium(struct Thread *th)
+{
+	struct GameTracker *gGT = sdata->gGT;
+	struct CsPodiumCameraThreadObj *podium = th->object;
+
+	if (podium->pathFrame32 == 0)
+	{
+		gGT->drivers[0]->funcPtrs[DRIVER_FUNC_INIT] = VehStuckProc_RIP_Init;
+	}
+
+	if (gGT->cameraDC[0].cameraMode != CAMERA_MODE_FREECAM)
+	{
+		if (D233.cutsceneState < CS_WAIT_INPUT)
+		{
+			D233.cutsceneState = CS_WAIT_INPUT;
+		}
+
+		D233.podiumPrizeDropReady = 1;
+	}
+
+	if (((D233.cutsceneState != CS_CAMERA_PAN || D233.boolStartToSkip != 0) && ((gGT->gameMode2 & CUP_NEW_WIN) != 0)) && sdata->ptrActiveMenu == NULL)
+	{
+		s16 stringIndex = LNG_SAVE_YOUR_CUP_PROGRESS;
+
+		if ((gGT->gameMode2 & CUP_NEW_BATTLE) != 0)
+		{
+			stringIndex = LNG_SAVE_YOUR_CUP_PROGRESS_NEW_BATTLE_ARENA_OPENED;
+		}
+
+		TakeCupProgress_Activate(stringIndex);
+		gGT->gameMode2 &= ~(CUP_NEW_WIN | CUP_NEW_BATTLE);
+	}
+
+	if (D233.cutsceneState == CS_CAMERA_PAN || sdata->ptrActiveMenu != NULL)
+	{
+		int numPoints = CAM_Path_GetNumPoints();
+		int maxFrame = numPoints * CS_PODIUM_PATH_FRAME_UNIT;
+
+		if (maxFrame != 0)
+		{
+			u16 frameTime = podium->pathFrame32 + gGT->elapsedTimeMS;
+			int frameTimeSigned = (s16)frameTime;
+			SVec3 pos;
+			SVec3 rot;
+			s16 camPath[4];
+			int frame;
+
+			if (maxFrame - CS_PODIUM_PRIZE_DROP_LEAD_TIME < frameTimeSigned)
+			{
+				D233.podiumPrizeDropReady = 1;
+			}
+
+			if (maxFrame <= frameTimeSigned)
+			{
+				frameTime = numPoints * CS_PODIUM_PATH_FRAME_UNIT - 1;
+
+				if (D233.cutsceneState < CS_WAIT_INPUT)
+				{
+					D233.cutsceneState = CS_WAIT_INPUT;
+				}
+			}
+
+			frame = ((int)frameTime << 16) >> (16 + CS_PODIUM_PATH_FRAME_FRACTION_BITS);
+			D233.podiumCameraFrame = frame;
+			podium->pathFrame32 = frameTime;
+
+			CAM_Path_Move(frame, pos.v, rot.v, camPath);
+
+			gGT->pushBuffer[0].pos = pos;
+			gGT->pushBuffer[0].rot = rot;
+		}
+	}
+	else
+	{
+		if ((gGT->gameMode2 & CUP_NEW_WIN) != 0)
+		{
+			goto check_skip_button;
+		}
+
+		DecalFont_DrawLine(sdata->lngStrings[LNG_PRESS_TO_CONTINUE], CS_PODIUM_CONTINUE_TEXT_X, CS_PODIUM_CONTINUE_TEXT_Y, FONT_BIG, JUSTIFY_CENTER | ORANGE);
+	}
+
+	if (((gGT->gameMode2 & CUP_NEW_WIN) == 0) && sdata->ptrActiveMenu == NULL)
+	{
+		u32 tapped = sdata->gGamepads->gamepad[0].buttonsTapped;
+		s16 rewardId;
+
+		if (((tapped & BTN_START) == 0) && ((D233.cutsceneState == CS_CAMERA_PAN || (tapped & (BTN_START | BTN_CROSS_one)) == 0)) &&
+		    ((gGT->gameMode2 & VEH_FREEZE_PODIUM) != 0))
+		{
+			return;
+		}
+
+		if ((gGT->gameMode1 & ADVENTURE_MODE) == 0)
+		{
+			sdata->mainMenuState = MAIN_MENU_TITLE;
+			gGT->gameMode1 = (gGT->gameMode1 & ~ADVENTURE_ARENA) | MAIN_MENU;
+			gGT->podiumRewardID = NOFUNC;
+			gGT->gameMode2 &= ~VEH_FREEZE_PODIUM;
+
+			RaceFlag_SetDrawOrder(0);
+			MainRaceTrack_RequestLoad(MAIN_MENU_LEVEL);
+			return;
+		}
+
+		D233.podiumPrizeDropReady = 1;
+		rewardId = gGT->podiumRewardID;
+		gGT->numWinners = 0;
+		gGT->renderFlags &= ~RENDER_FLAG_CONFETTI;
+
+		if (rewardId != STATIC_BIG1)
+		{
+			if (!CS_Camera_BoolGotoBoss())
+			{
+				s16 hintID;
+
+				D233.isCutsceneOver = 1;
+				th->flags |= THREAD_FLAG_DEAD;
+
+				CS_DestroyPodium_StartDriving();
+
+				switch (rewardId)
+				{
+				case STATIC_TROPHY:
+					hintID = ADV_MASK_HINT_ID_TROPHY_AWARDED;
+					break;
+				case STATIC_RELIC:
+					hintID = ADV_MASK_HINT_ID_RELIC_AWARDED;
+					break;
+				case STATIC_KEY:
+					hintID = ADV_MASK_HINT_ID_KEY_AWARDED;
+					break;
+				case STATIC_TOKEN:
+					hintID = ADV_MASK_HINT_ID_CTR_TOKEN_AWARDED;
+					break;
+				default:
+					hintID = ADV_MASK_HINT_ID_GEM_AWARDED;
+					break;
+				}
+
+				if (!VehPickupItem_MaskBoolGoodGuy(gGT->drivers[0]))
+				{
+					hintID += ADV_MASK_HINT_UKA_UKA_XA_OFFSET;
+				}
+
+				CDSYS_XAPauseForce();
+				CDSYS_XAPlay(1, hintID);
+
+				gGT->podiumRewardID = NOFUNC;
+				return;
+			}
+
+			th->funcThTick = CS_Camera_ThTick_Boss;
+
+			if (gGT->podiumRewardID != STATIC_RELIC)
+			{
+				D233.bossCutsceneIndex = -1;
+				return;
+			}
+
+			if (gGT->currAdvProfile.numRelics < ADV_OXIDE_FINAL_RELIC_COUNT)
+			{
+				D233.bossCutsceneIndex = -1;
+				return;
+			}
+
+			D233.bossCutsceneIndex = gGT->levelID - GEM_STONE_VALLEY + OXIDE_RELICS_GEMSTONE;
+			return;
+		}
+
+		gGT->podiumRewardID = NOFUNC;
+		gGT->gameMode1 &= ~ADVENTURE_ARENA;
+		gGT->gameMode2 &= ~VEH_FREEZE_PODIUM;
+
+		MainRaceTrack_RequestLoad(CHECK_ADV_BIT(sdata->advProgress.rewards, ADV_REWARD_BEAT_OXIDE_SECOND) ? OXIDE_TRUE_ENDING : OXIDE_ENDING);
+
+		th->flags |= THREAD_FLAG_DEAD;
+		return;
+	}
+
+check_skip_button:
+	if ((sdata->gGamepads->gamepad[0].buttonsTapped & BTN_START) != 0)
+	{
+		D233.boolStartToSkip = 1;
+	}
+}

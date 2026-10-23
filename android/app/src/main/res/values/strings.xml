@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="loading_label">CARREGANDO</string>
+    <string name="setup_title">CTR Mobile</string>
+    <string name="setup_instructions">Select your NTSC-U disc image \u2014 a raw BIN or a CHD. It is copied into the app\'s storage; the original file is not changed.</string>
+    <string name="setup_no_disc">No disc image has been imported.</string>
+    <string name="setup_invalid_disc">O arquivo selecionado não é uma imagem NTSC-U BIN ou CHD compatível.</string>
+    <string name="setup_select_disc">Select disc image</string>
+    <string name="setup_replace_disc">Replace disc image</string>
+    <string name="setup_importing_disc">Carregando arquivo do jogo&#8230;</string>
+    <string name="setup_import_progress">Carregando arquivo: %1$d%%</string>
+    <string name="setup_starting_game">Iniciando CTR Mobile&#8230;</string>
+    <string name="setup_select_another_disc">Select another disc image</string>
+
+    <string name="launcher_subtitle">Crash Team Racing, dual screen</string>
+    <string name="launcher_disc_section">DISC</string>
+    <string name="launcher_settings_section">SETTINGS</string>
+    <string name="launcher_disc_ready">Arquivo BIN carregado · %1$d MB</string>
+    <string name="launcher_disc_ready_chd">Arquivo CHD carregado · %1$d MB</string>
+    <string name="launcher_empty_title">CARREGUE O JOGO</string>
+    <string name="launcher_empty_hint">SELECIONE O ARQUIVO PARA CONTINUAR</string>
+    <string name="launcher_loaded_title">JOGO CARREGADO</string>
+    <string name="launcher_disc_file_details">%1$s (%2$dMB)</string>
+    <string name="launcher_default_bin_name">CRASH TEAM RACING.BIN</string>
+    <string name="launcher_default_chd_name">CRASH TEAM RACING.CHD</string>
+    <string name="launcher_disc_replace_hint">Replace it only if you want to use a different image.</string>
+    <string name="launcher_play">PLAY</string>
+    <string name="launcher_settings_title">Configurações</string>
+    <string name="launcher_import_disc_description">Carregar arquivo do jogo</string>
+    <string name="launcher_replace_disc_description">Alterar arquivo do jogo</string>
+</resources>

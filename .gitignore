@@ -1,0 +1,32 @@
+**/build/
+dist/
+assets/
+# APK assets shipped by the app are source; local disc images are ignored above.
+!android/app/src/main/assets/
+# Native and C/C++ build output
+*.o
+*.gch
+*.a
+*.d
+*.depend
+*.map
+compile_commands.json
+.venv/
+.cache/
+.idea/
+.vscode/
+*.swp
+*~
+*.log
+memcards/
+
+# Android/Gradle
+.gradle/
+local.properties
+**/.cxx/
+**/.externalNativeBuild/
+*.apk
+*.aar
+captures/
+*.keystore
+*.jks
