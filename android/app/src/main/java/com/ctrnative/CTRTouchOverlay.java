@@ -935,20 +935,9 @@ public final class CTRTouchOverlay extends View {
         rootMenuSelection = gameMenuSelection;
         for (int i = 0; i < gameMenuRows.length; i++) {
             drawRootMenuRow(canvas, left, right, top + i * (rowHeight + gap), rowHeight,
-                    raceResultMenuLabel(gameMenuRows[i]), i, textSize, unit);
+                    gameMenuRows[i], i, textSize, unit);
         }
         rootMenuSelection = previousSelection;
-    }
-
-    private String raceResultMenuLabel(String label) {
-        String value = label.toUpperCase(java.util.Locale.ROOT);
-        if (value.contains("RETRY") || value.contains("REPEAT") || value.contains("REPETIR")) return "REPETIR";
-        if (value.contains("CHANGE LEVEL") || value.contains("CHANGE TRACK") || value.contains("MUDAR PISTA")) return "MUDAR PISTA";
-        if (value.contains("CHANGE CHARACTER") || value.contains("MUDAR PERSONAGEM")) return "MUDAR PERSONAGEM";
-        if (value.contains("EXIT TO MAP") || value.contains("QUIT") || value.contains("SAIR")) return "SAIR";
-        if (value.contains("SAVE GHOST")) return "SALVAR FANTASMA";
-        if (value.contains("SETUP")) return "OPÇÕES";
-        return label;
     }
 
     private boolean isRaceResultsContinueAt(float x, float y) {

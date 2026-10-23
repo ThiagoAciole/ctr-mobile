@@ -1,0 +1,69 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android build packages
+        run: sdkmanager "platforms;android-34" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Prepare release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo "Missing Android signing secrets" >&2; exit 1; }
+          keystore_path="$RUNNER_TEMP/ctr-mobile-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          echo "ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          RELEASE_VERSION_NAME: ${{ github.ref_name }}
+          RELEASE_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          ./gradlew --no-daemon :app:assembleRelease -PversionName="$RELEASE_VERSION_NAME" -PversionCode="$RELEASE_VERSION_CODE"
+
+      - name: Publish APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          apk="android/app/build/outputs/apk/release/app-release.apk"
+          release_apk="crt-mobile-${TAG_NAME}.apk"
+          cp "$apk" "$release_apk"
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" "$release_apk" --clobber
+          else
+            gh release create "$TAG_NAME" "$release_apk#CTR Mobile Android APK" \
+              --title "CTR Mobile $TAG_NAME" \
+              --generate-notes
+          fi
