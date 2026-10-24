@@ -2,6 +2,7 @@ package com.ctrnative;
 
 import android.app.Activity;
 import android.content.SharedPreferences;
+import java.util.Objects;
 import android.graphics.Color;
 import android.os.Build;
 import android.graphics.drawable.GradientDrawable;
@@ -74,7 +75,7 @@ public final class CTRControlsActivity extends Activity {
         gamepad.setFocusable(true);
         gamepad.setOnClickListener(view -> startActivity(new android.content.Intent(this, CTRGamepadActivity.class)));
         FrameLayout.LayoutParams gamepadParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(48), Gravity.TOP | Gravity.LEFT);
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(48), Gravity.TOP | Gravity.START);
         gamepadParams.setMargins(dp(24), dp(12), 0, 0);
         root.addView(gamepad, gamepadParams);
         preview.addOnLayoutChangeListener((view, left, top, right, bottom,
@@ -97,7 +98,7 @@ public final class CTRControlsActivity extends Activity {
         sizeLabel.setShadowLayer(dp(1), 0, dp(1), Color.BLACK);
         dialog.addView(sizeLabel);
         TextView sizeValue = text(scalePercent + "%", Color.WHITE, 12,
-                Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+                Gravity.END | Gravity.CENTER_VERTICAL);
         dialog.addView(sizeValue);
 
         SeekBar size = new SeekBar(this);
@@ -336,7 +337,7 @@ public final class CTRControlsActivity extends Activity {
         if (!"left".equals(item.key) && !"right".equals(item.key)) return null;
         String mateKey = "left".equals(item.key) ? "right" : "left";
         for (ControlItem candidate : items) {
-            if (mateKey.equals(candidate.key)) return candidate;
+            if (Objects.equals(mateKey, candidate.key)) return candidate;
         }
         return null;
     }

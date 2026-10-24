@@ -26,7 +26,7 @@ final class CTRSeekBarStyle {
         progress.setSize(-1, trackHeight);
 
         LayerDrawable progressTrack = new LayerDrawable(new android.graphics.drawable.Drawable[] {
-                track, new ClipDrawable(progress, Gravity.LEFT, ClipDrawable.HORIZONTAL)
+                track, new ClipDrawable(progress, Gravity.START, ClipDrawable.HORIZONTAL)
         }) {
             @Override
             protected void onBoundsChange(android.graphics.Rect bounds) {

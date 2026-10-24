@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.content.ContentResolver;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Canvas;
@@ -55,7 +54,6 @@ public final class CTRNativeLauncherActivity extends Activity {
     private static final int RAW_SECTOR_SIZE = 2352;
     private static final int PVD_LBA = 16;
     private static final int FORM1_DATA_OFFSET = 24;
-    private static final String CONTROL_PREFS = CTRAppPreferences.PREFS_NAME;
     private static final int COLOR_BACKGROUND = Color.rgb(18, 18, 18);
     private static final int COLOR_WARN = Color.rgb(255, 160, 122);
 

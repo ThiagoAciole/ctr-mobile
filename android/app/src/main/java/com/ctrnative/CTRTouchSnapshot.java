@@ -1,5 +1,7 @@
 package com.ctrnative;
 
+import java.util.Objects;
+
 /** One immutable presentation from the engine, read with a single JNI call. */
 final class CTRTouchSnapshot {
     final int screen;
@@ -40,8 +42,8 @@ final class CTRTouchSnapshot {
 
     boolean hasSameContent(CTRTouchSnapshot other) {
         return other != null && generation == other.generation && screen == other.screen && inputReady == other.inputReady
-                && menu.equals(other.menu) && campaign.equals(other.campaign) && pause.equals(other.pause)
-                && character.equals(other.character) && selection.equals(other.selection)
-                && results.equals(other.results) && name.equals(other.name);
+                && Objects.equals(menu, other.menu) && Objects.equals(campaign, other.campaign) && Objects.equals(pause, other.pause)
+                && Objects.equals(character, other.character) && Objects.equals(selection, other.selection)
+                && Objects.equals(results, other.results) && Objects.equals(name, other.name);
     }
 }

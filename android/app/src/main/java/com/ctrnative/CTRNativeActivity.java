@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -58,6 +57,7 @@ public class CTRNativeActivity extends SDLActivity {
     private static final long STARTUP_PROGRESS_DURATION_MS = 25_000L;
     private static final long STARTUP_PROGRESS_OVERRUN_MS = 10_000L;
     private static final long STARTUP_PROGRESS_UPDATE_MS = 100L;
+    @SuppressWarnings("StaticFieldLeak")
     private static volatile CTRNativeActivity activeActivity;
     private long appliedTouchGeneration;
     private CTRTouchSnapshot lastOverlaySnapshot;
@@ -259,6 +259,7 @@ public class CTRNativeActivity extends SDLActivity {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
+    @SuppressWarnings("unused")
     public static void onNativeMainMenuReady() {
         CTRNativeActivity activity = activeActivity;
         if (activity == null) return;
@@ -268,6 +269,7 @@ public class CTRNativeActivity extends SDLActivity {
         });
     }
 
+    @SuppressWarnings("unused")
     public static void onNativeTouchScreenChanged() {
         CTRNativeActivity activity = activeActivity;
         if (activity != null && activity.touchHandler != null) {
@@ -276,6 +278,7 @@ public class CTRNativeActivity extends SDLActivity {
         }
     }
 
+    @SuppressWarnings("unused")
     public static void showCampaignStorageError() {
         Activity activity = (Activity) SDLActivity.getContext();
         if (activity != null) {
@@ -468,7 +471,7 @@ public class CTRNativeActivity extends SDLActivity {
 
             gameSettingsButton = gear;
             addContentView(gear, new FrameLayout.LayoutParams(dp(36), dp(36),
-                    Gravity.TOP | Gravity.LEFT));
+                    Gravity.TOP | Gravity.START));
             gear.post(() -> {
                 ViewGroup parent = (ViewGroup) gear.getParent();
                 int rootHeight = gear.getRootView().getHeight();
@@ -656,7 +659,7 @@ public class CTRNativeActivity extends SDLActivity {
             float panelWidth = width;
             float panelHeight = height;
             placeSettingsView(panelContainer, panelX, panelY, panelWidth, panelHeight,
-                    Gravity.TOP | Gravity.LEFT);
+                    Gravity.TOP | Gravity.START);
             float unit = Math.min(panelWidth, panelHeight);
             heading.setTextSize(TypedValue.COMPLEX_UNIT_PX, unit * 0.055f);
             placeSettingsView(heading, panelWidth * 0.25f, panelHeight * 0.045f,
@@ -758,7 +761,7 @@ public class CTRNativeActivity extends SDLActivity {
             labelRow.addView(label, new LinearLayout.LayoutParams(0,
                     ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             TextView percent = makeSettingsText((initialVolume * 100 / 255) + "%",
-                    Color.WHITE, 15, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+                    Color.WHITE, 15, Gravity.END | Gravity.CENTER_VERTICAL);
             labelRow.addView(percent, new LinearLayout.LayoutParams(dp(54),
                     ViewGroup.LayoutParams.WRAP_CONTENT));
             row.addView(labelRow);
@@ -1268,7 +1271,7 @@ public class CTRNativeActivity extends SDLActivity {
 
     private String getFileName(Uri uri) {
         String result = null;
-        if (uri.getScheme().equals("content")) {
+        if (uri.getScheme() != null && uri.getScheme().equals("content")) {
             try (android.database.Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
                 if (cursor != null && cursor.moveToFirst()) {
                     int index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
@@ -1390,6 +1393,7 @@ public class CTRNativeActivity extends SDLActivity {
             Log.e(CTRDS_TAG, "refresh rate request failed: " + e.getMessage());
         }
     }
+    @SuppressWarnings("StaticFieldLeak")
     private static CTRDSPresentation ctrdsPresentation;
 
     public static native void nativeCompanionSurfaceChanged(Surface surface, int width, int height);
