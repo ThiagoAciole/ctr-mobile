@@ -1406,6 +1406,14 @@ int Ctrds_TouchScreenState(void)
 	{
 		return 18;
 	}
+	// The arena podium clears the race HUD, so it would fall through to the
+	// waiting state, which has no touch controls. Its "Press X" prompt is the
+	// results Continue button, so use that preset to send Cross.
+	if (((gGT->gameMode1 & ADVENTURE_ARENA) != 0) && (gGT->podiumRewardID != NOFUNC) &&
+	    ((gGT->hudFlags & HUD_FLAG_RACE_HUD) == 0))
+	{
+		return 2;
+	}
 	#endif
 
 	// The attract-mode race clears the HUD, so it would otherwise look like a
